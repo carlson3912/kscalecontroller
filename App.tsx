@@ -8,7 +8,7 @@ import ControllerScreen from './screens/ControllerScreen';
 import RobotsScreen from './screens/RobotsScreen';
 import CalibrateScreen from './screens/CalibrateScreen';
 import AddRobotScreen from './screens/AddRobotScreen';
-import VideoScreen from './screens/VideoScreen';
+// import VideoScreen from './screens/VideoScreen2';
 import { View } from 'react-native';
 import { ThemeProvider } from './components/ThemeContext';
 import { useTheme } from './components/ThemeContext';
@@ -44,8 +44,8 @@ function AppContainer() {
         >
           <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Robots" component={RobotsScreen} options={{ headerShown: false }} />
-          {/* <Stack.Screen name="Controller" component={ControllerScreen} options={{ headerShown: false }} /> */}
-          <Stack.Screen name="Controller" component={VideoScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Controller" component={ControllerScreen} options={{ headerShown: false }} />
+          {/* <Stack.Screen name="Controller" component={VideoScreen} options={{ headerShown: false }} /> */}
           <Stack.Screen name="Calibrate" component={CalibrateScreen} options={{ headerShown: false }} />
           <Stack.Screen name="AddRobot" component={AddRobotScreen} options={{ headerShown: false }} />
         </Stack.Navigator>
