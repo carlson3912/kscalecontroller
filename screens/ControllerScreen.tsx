@@ -1,12 +1,9 @@
 import React, {useState, useRef, useEffect, useCallback} from 'react';
 import {
-  SafeAreaView,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  Alert,
   TextInput,
   Modal,
 } from 'react-native';
@@ -15,7 +12,8 @@ import {Slider1D} from '../components/Slider';
 import { useFocusEffect } from '@react-navigation/native';
 import Orientation from 'react-native-orientation-locker';
 import { useTheme } from '../components/ThemeContext';
-
+import VideoScreen from './Video';
+import { RTCView } from 'react-native-webrtc';
 
 interface Robot {
   id: string;
@@ -35,10 +33,9 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
   const [slider1D, setSlider1D] = useState(0);
   const [joystick2D, setJoystick2D] = useState({x: 0, y: 0});
   const [showSettings, setShowSettings] = useState(false);
+  const [stream, setStream] = useState(null);
   const [scale, setScale] = useState('1.0');
-  const socketRef = useRef<WebSocket | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-
+  const [vector, setVector] = useState({x: 0, y: 0, z: 0});
   const joystick2DRef = useRef({x: 0, y: 0});
   const slider1DRef = useRef(0);
   const scaleRef = useRef('1.0');
@@ -55,15 +52,9 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
     useCallback(() => {
       // Screen just focused
       Orientation.unlockAllOrientations();
-      connect();
       return () => {
         // Cleanup logic when screen is unfocused (navigated away, blurred, etc.)
         Orientation.lockToPortrait();
-        disconnect(); // ← your custom cleanup
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
       };
     }, [])
   );
@@ -83,68 +74,19 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
   }, [scale]);
 
 
-
-  const connect = () => {
-    try {
-      // Use robot's IP to construct WebSocket URL
-      const url = `ws://${robot.ip}`;
-      console.log(`Connecting to: ${url}`);
-      socketRef.current = new WebSocket(url);
-
-      socketRef.current.onopen = () => {
-        console.log("onopen")
-        setIsConnected(true);
-      };
-
-      socketRef.current.onclose = () => {
-        console.log("onclose")
-        setIsConnected(false);
-      };
-
-      socketRef.current.onerror = error => {
-        console.log("onerror", error)
-      };
-    } catch (error) {
-      Alert.alert('Connection Error', 'Failed to connect: ' + error);
-    }
-  };
-
-  const disconnect = () => {
-    if (socketRef.current) {
-      socketRef.current.close();
-      socketRef.current = null;
-    }
-  };
-
   const sendVector = () => {
     // Use ref values instead of state values
     const currentJoystick = joystick2DRef.current;
     const currentSlider = slider1DRef.current;
     const currentScale = parseFloat(scaleRef.current);
     
-    // Check if all inputs are at zero
-    const isAllZero = currentJoystick.x === 0 && currentJoystick.y === 0 && currentSlider === 0;
-    
-    // Always send data - either non-zero values or zero values
+  
     const vectorData = {
-      type: "vector",
-      vector: {
         x: currentJoystick.x * currentScale,
         y: currentJoystick.y * currentScale,
         z: currentSlider * currentScale
-      }
     };
-    
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify(vectorData));
-    }
-    
-    // If all inputs are zero, set a timeout for the next send
-    if(isAllZero && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      setTimeout(() => {
-        sendVector();
-      }, 500);
-    }
+    setVector(vectorData);
   };
 
   const openSettings = () => {
@@ -157,11 +99,23 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" /> */}
+      {/* Video Background - Positioned absolutely to cover entire screen */}
+      {stream && (
+        <View style={styles.videoContainer}>
+          <RTCView 
+            streamURL={stream.toURL()} 
+            style={styles.videoBackground}
+            objectFit="cover"
+          />
+        </View>
+      )}
+      
+      {/* VideoScreen component - handles WebRTC setup */}
+      <VideoScreen setStream={setStream} vector={vector} setIsConnected={setIsConnected} />
       
       {/* Top Controls - Settings and Back at the very top */}
       <View style={styles.topControls}>
-        <TouchableOpacity onPress={() => {navigation.goBack(); disconnect()}}>
+        <TouchableOpacity onPress={() => {navigation.goBack()}}>
           <Text style={[styles.backButton, { color: theme.highlight }]}>←</Text>
         </TouchableOpacity>
         <View style={styles.topRight}>
@@ -227,6 +181,20 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    position: 'relative', // Add this for absolute positioning context
+  },
+  videoContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1, // Video behind controls
+  },
+  videoBackground: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
   },
   topControls: {
     flexDirection: 'row',
@@ -235,6 +203,7 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingHorizontal: 16,
     paddingBottom: 8,
+    zIndex: 2, // Controls above video
   },
   backButton: {
     fontSize: 24,
@@ -260,6 +229,7 @@ const styles = StyleSheet.create({
   },
   settingsButtonText: {
     fontSize: 20,
+
   },
 
   robotName: {
@@ -294,6 +264,7 @@ const styles = StyleSheet.create({
     padding: 20,
     flex: 1,
     alignItems: 'flex-end',
+    zIndex: 2, // Controls above video
   },
   rightControls: {
     alignItems: 'flex-end',

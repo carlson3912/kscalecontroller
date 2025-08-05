@@ -8,7 +8,6 @@ import ControllerScreen from './screens/ControllerScreen';
 import RobotsScreen from './screens/RobotsScreen';
 import CalibrateScreen from './screens/CalibrateScreen';
 import AddRobotScreen from './screens/AddRobotScreen';
-// import VideoScreen from './screens/VideoScreen2';
 import { View } from 'react-native';
 import { ThemeProvider } from './components/ThemeContext';
 import { useTheme } from './components/ThemeContext';
