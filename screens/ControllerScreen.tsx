@@ -13,7 +13,7 @@ import {Slider1D} from '../components/Slider';
 import { useFocusEffect } from '@react-navigation/native';
 import Orientation from 'react-native-orientation-locker';
 import { useTheme } from '../components/ThemeContext';
-import VideoScreen from './Video';
+import VideoScreen from '../components/Video';
 import { RTCView } from 'react-native-webrtc';
 
 interface Robot {
