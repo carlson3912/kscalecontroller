@@ -33,6 +33,7 @@ class WebRTCServer:
         self.webrtc.connect("on-negotiation-needed", self.on_negotiation_needed)
         self.webrtc.connect("on-ice-candidate", self.send_ice_candidate_message)
         self.webrtc.connect("on-data-channel", self.on_data_channel)
+        self.webrtc.connect("pad-added", self.on_incoming_stream) 
         self.pipe.set_state(Gst.State.PLAYING)
 
     def on_message_string(self, channel, message):
@@ -41,6 +42,47 @@ class WebRTCServer:
     def on_data_channel(self, webrtc, channel):
         print("New data channel:", channel.props.label)
         channel.connect("on-message-string", self.on_message_string)
+
+    def on_incoming_stream(self, webrtc, pad):  
+        print(f"New pad added: {pad.get_name()}")
+        if pad.get_direction() != Gst.PadDirection.SRC:
+            return
+
+        caps = pad.get_current_caps()
+        structure = caps.get_structure(0)
+        media_type = structure.get_name()
+        print(f"Media type of incoming pad: {media_type}")
+
+        if media_type.startswith("application/x-rtp"):
+            # Create depayloader, decoder, and sink elements dynamically
+
+            # For video (e.g. VP8)
+            if structure.get_value("media") == "video":
+                depay = Gst.ElementFactory.make("rtpvp8depay", None)
+                decoder = Gst.ElementFactory.make("vp8dec", None)
+                sink = Gst.ElementFactory.make("autovideosink", None)  # Use kmssink on Pi for HDMI output
+
+                if not depay or not decoder or not sink:
+                    print("Failed to create depay, decoder or sink")
+                    return
+
+                # Add to pipeline
+                self.pipe.add(depay)
+                self.pipe.add(decoder)
+                self.pipe.add(sink)
+
+                depay.sync_state_with_parent()
+                decoder.sync_state_with_parent()
+                sink.sync_state_with_parent()
+
+                # Link elements
+                depay.link(decoder)
+                decoder.link(sink)
+
+                # Link webrtc src pad to depayloader sink pad
+                pad.link(depay.get_static_pad("sink"))
+
+                print("Incoming video stream linked and rendering started.")
 
     def on_negotiation_needed(self, element):
         print("Negotiation needed")

@@ -6,6 +6,7 @@ import {
   View,
   TextInput,
   Modal,
+  Switch,
 } from 'react-native';
 import {Joystick2D} from '../components/Joystick';
 import {Slider1D} from '../components/Slider';
@@ -34,8 +35,10 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
   const [joystick2D, setJoystick2D] = useState({x: 0, y: 0});
   const [showSettings, setShowSettings] = useState(false);
   const [stream, setStream] = useState(null);
+  const [localStream, setLocalStream] = useState(null);
   const [scale, setScale] = useState('1.0');
   const [vector, setVector] = useState({x: 0, y: 0, z: 0});
+  const [showLocalStream, setShowLocalStream] = useState(false); // NEW: Toggle for local stream
   const joystick2DRef = useRef({x: 0, y: 0});
   const slider1DRef = useRef(0);
   const scaleRef = useRef('1.0');
@@ -73,14 +76,12 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
     scaleRef.current = scale;
   }, [scale]);
 
-
   const sendVector = () => {
     // Use ref values instead of state values
     const currentJoystick = joystick2DRef.current;
     const currentSlider = slider1DRef.current;
     const currentScale = parseFloat(scaleRef.current);
     
-  
     const vectorData = {
         x: currentJoystick.x * currentScale,
         y: currentJoystick.y * currentScale,
@@ -111,7 +112,7 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
       )}
       
       {/* VideoScreen component - handles WebRTC setup */}
-      <VideoScreen setStream={setStream} vector={vector} setIsConnected={setIsConnected} />
+      <VideoScreen setStream={setStream} vector={vector} setIsConnected={setIsConnected} setLocalStream={setLocalStream} showLocalStream={showLocalStream} />
       
       {/* Top Controls - Settings and Back at the very top */}
       <View style={styles.topControls}>
@@ -129,7 +130,19 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
         </View>
       </View>
 
-      {/* Bottom Joysticks */}
+      {/* NEW: Local Stream Preview - Above Stop Button */}
+      {showLocalStream && localStream && (
+        <View style={styles.localStreamContainer}>
+          <RTCView 
+            streamURL={localStream.toURL()} 
+            style={styles.localStream}
+            objectFit="cover"
+          />
+          <View style={styles.localStreamBorder} />
+        </View>
+      )}
+
+      {/* Bottom Joysticks */}  
       <View style={styles.bottomJoysticks}>
         <Joystick2D joystick2D={joystick2D} setJoystick2D={setJoystick2D} />
         <View style={styles.rightControls}>
@@ -168,6 +181,19 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
               />
             </View>
 
+            {/* NEW: Local Stream Toggle */}
+            <View style={styles.settingItem}>
+              <View style={styles.toggleContainer}>
+                <Text style={[styles.settingLabel, { color: theme.primary, marginBottom: 0 }]}>Stream Front Camera</Text>
+                <Switch
+                  value={showLocalStream}
+                  onValueChange={setShowLocalStream}
+                  trackColor={{ false: theme.secondary, true: theme.highlight }}
+                  thumbColor={showLocalStream ? theme.primary : theme.background}
+                />
+              </View>
+            </View>
+
             <TouchableOpacity style={[styles.saveButton, { backgroundColor: theme.highlight }]} onPress={closeSettings}>
               <Text style={[styles.saveButtonText, { color: theme.primary }]}>Save</Text>
             </TouchableOpacity>
@@ -195,6 +221,28 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
+  },
+  // NEW: Local Stream Styles
+  localStreamContainer: {
+    position: 'absolute',
+    bottom: 200, // Position above the stop button
+    right: 20, // Same right padding as bottomJoysticks
+    zIndex: 3, // Above video and controls
+  },
+  localStream: {
+    width: 120,
+    height: 90,
+    borderRadius: 8,
+  },
+  localStreamBorder: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   topControls: {
     flexDirection: 'row',
@@ -229,9 +277,7 @@ const styles = StyleSheet.create({
   },
   settingsButtonText: {
     fontSize: 20,
-
   },
-
   robotName: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -261,7 +307,7 @@ const styles = StyleSheet.create({
   bottomJoysticks: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 20,
+    padding: 20, // This is the padding we're matching
     flex: 1,
     alignItems: 'flex-end',
     zIndex: 2, // Controls above video
@@ -317,6 +363,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 8,
+  },
+  // NEW: Toggle Container Style
+  toggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   textInput: {
     borderWidth: 1,

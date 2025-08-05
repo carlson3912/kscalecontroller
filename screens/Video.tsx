@@ -1,10 +1,9 @@
 // App.tsx or VideoScreen.tsx
-import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { mediaDevices } from 'react-native-webrtc';
 import {
   RTCPeerConnection,
-  RTCSessionDescription,
-  RTCView,
+  RTCSessionDescription
 } from 'react-native-webrtc';
 
 const SIGNALING_URL = 'ws://10.33.12.68:8765'; // Match robot WebSocket server port
@@ -16,9 +15,10 @@ interface VideoProps {
   setStream: (stream: any) => void;
   vector: { x: number; y: number; z: number };
   setIsConnected: (isConnected: boolean) => void;
+  setLocalStream: (stream: any) => void;
 }
 
-export default function VideoScreen({ setStream, vector, setIsConnected }: VideoProps) {
+export default function VideoScreen({ setStream, vector, setIsConnected, setLocalStream }: VideoProps) {
 
   const pc = useRef<RTCPeerConnection | null>(null);
   const ws = useRef<WebSocket | null>(null);
@@ -36,6 +36,30 @@ export default function VideoScreen({ setStream, vector, setIsConnected }: Video
 
   useEffect(() => {
     pc.current = new RTCPeerConnection(configuration);
+      // Capture front camera video
+  const startLocalStream = async () => {
+    try {
+      const stream = await mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: 'user',  // 'user' is front camera, 'environment' is back camera
+          width: 640,
+          height: 480,
+          frameRate: 30,
+        },
+      });
+      // Add all tracks from local stream to peer connection
+      stream.getTracks().forEach(track => {
+        pc.current?.addTrack(track, stream);
+      });
+      // Optionally: store or show the local stream somewhere
+      setLocalStream(stream);
+    } catch (e) {
+      console.error('getUserMedia error:', e);
+    }
+  };
+
+  startLocalStream();
 
     pc.current.ontrack = (event) => {
       console.log('ontrack', event);
