@@ -11,14 +11,13 @@ from gi.repository import Gst, GstWebRTC, GstSdp
 
 Gst.init(None)
 
-PIPELINE_DESC = (
-        "libcamerasrc ! "
-        "capsfilter caps=video/x-raw,format=YUY2,width=640,height=480,framerate=30/1 ! "
-        "videoconvert ! "
-        "vp8enc deadline=1 ! "
-        "rtpvp8pay ! "
-        "webrtcbin name=sendonly bundle-policy=max-bundle stun-server=stun://stun.l.google.com:19302"
-    )
+PIPELINE_DESC = '''
+webrtcbin name=sendrecv bundle-policy=max-bundle stun-server=stun://stun.l.google.com:19302
+ libcamerasrc ! capsfilter caps=video/x-raw,format=YUY2,width=640,height=480,framerate=30/1 ! videoconvert ! queue ! vp8enc name=vp8enc0 deadline=1 ! rtpvp8pay !
+ queue ! application/x-rtp,media=video,encoding-name=VP8,payload=97 ! sendrecv.
+ alsasrc device=hw:2,0 ! audioconvert ! audioresample ! queue ! opusenc ! rtpopuspay !
+ queue ! application/x-rtp,media=audio,encoding-name=OPUS,payload=96 ! sendrecv.
+'''
 
 class WebRTCServer:
     def __init__(self, loop):
@@ -29,11 +28,13 @@ class WebRTCServer:
 
     def start_pipeline(self):
         self.pipe = Gst.parse_launch(PIPELINE_DESC)
-        self.webrtc = self.pipe.get_by_name("sendonly")
+        self.webrtc = self.pipe.get_by_name("sendrecv")
         self.webrtc.connect("on-negotiation-needed", self.on_negotiation_needed)
         self.webrtc.connect("on-ice-candidate", self.send_ice_candidate_message)
         self.webrtc.connect("on-data-channel", self.on_data_channel)
         self.webrtc.connect("pad-added", self.on_incoming_stream) 
+        self.vp8enc = self.pipe.get_by_name("vp8enc0")
+        self.vp8enc.set_property("keyframe-max-dist", 30)
         self.pipe.set_state(Gst.State.PLAYING)
 
     def on_message_string(self, channel, message):
@@ -43,46 +44,52 @@ class WebRTCServer:
         print("New data channel:", channel.props.label)
         channel.connect("on-message-string", self.on_message_string)
 
-    def on_incoming_stream(self, webrtc, pad):  
-        print(f"New pad added: {pad.get_name()}")
-        if pad.get_direction() != Gst.PadDirection.SRC:
+    def on_incoming_decodebin_stream(self, _, pad):
+        if not pad.has_current_caps():
+            print (pad, 'has no caps, ignoring')
             return
 
         caps = pad.get_current_caps()
-        structure = caps.get_structure(0)
-        media_type = structure.get_name()
-        print(f"Media type of incoming pad: {media_type}")
+        print("!!!!")
+        print(caps.get_structure(0))
+        s = caps.get_structure(0)
+        name = s.get_name()
+        if name.startswith('video'):
+            q = Gst.ElementFactory.make('queue')
+            conv = Gst.ElementFactory.make('videoconvert')
+            sink = Gst.ElementFactory.make('autovideosink')
+            self.pipe.add(q)
+            self.pipe.add(conv)
+            self.pipe.add(sink)
+            self.pipe.sync_children_states()
+            pad.link(q.get_static_pad('sink'))
+            q.link(conv)
+            conv.link(sink)
+        elif name.startswith('audio'):
+            q = Gst.ElementFactory.make('queue')
+            conv = Gst.ElementFactory.make('audioconvert')
+            resample = Gst.ElementFactory.make('audioresample')
+            sink = Gst.ElementFactory.make('alsasink')
+            sink.set_property('device', 'plughw:2,0')
+            self.pipe.add(q)
+            self.pipe.add(conv)
+            self.pipe.add(resample)
+            self.pipe.add(sink)
+            self.pipe.sync_children_states()
+            pad.link(q.get_static_pad('sink'))
+            q.link(conv)
+            conv.link(resample)
+            resample.link(sink)
 
-        if media_type.startswith("application/x-rtp"):
-            # Create depayloader, decoder, and sink elements dynamically
+    def on_incoming_stream(self, _, pad):
+        if pad.direction != Gst.PadDirection.SRC:
+            return
 
-            # For video (e.g. VP8)
-            if structure.get_value("media") == "video":
-                depay = Gst.ElementFactory.make("rtpvp8depay", None)
-                decoder = Gst.ElementFactory.make("vp8dec", None)
-                sink = Gst.ElementFactory.make("autovideosink", None)  # Use kmssink on Pi for HDMI output
-
-                if not depay or not decoder or not sink:
-                    print("Failed to create depay, decoder or sink")
-                    return
-
-                # Add to pipeline
-                self.pipe.add(depay)
-                self.pipe.add(decoder)
-                self.pipe.add(sink)
-
-                depay.sync_state_with_parent()
-                decoder.sync_state_with_parent()
-                sink.sync_state_with_parent()
-
-                # Link elements
-                depay.link(decoder)
-                decoder.link(sink)
-
-                # Link webrtc src pad to depayloader sink pad
-                pad.link(depay.get_static_pad("sink"))
-
-                print("Incoming video stream linked and rendering started.")
+        decodebin = Gst.ElementFactory.make('decodebin')
+        decodebin.connect('pad-added', self.on_incoming_decodebin_stream)
+        self.pipe.add(decodebin)
+        decodebin.sync_state_with_parent()
+        self.webrtc.link(decodebin)
 
     def on_negotiation_needed(self, element):
         print("Negotiation needed")
@@ -113,6 +120,7 @@ class WebRTCServer:
 
     def handle_client_message(self, message):
         print("Handling client message")
+        print(message)
         if(message == "HELLO"):
             self.start_pipeline()
             return

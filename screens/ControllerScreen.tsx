@@ -43,7 +43,6 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
   const slider1DRef = useRef(0);
   const scaleRef = useRef('1.0');
 
-  // Get robot from navigation params
   const robot: Robot = route.params?.robot || {
     id: '1',
     name: 'Default Robot',

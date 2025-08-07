@@ -19,7 +19,7 @@ interface VideoProps {
 }
 
 export default function VideoScreen({ setStream, vector, setIsConnected, setLocalStream }: VideoProps) {
-
+ 
   const pc = useRef<RTCPeerConnection | null>(null);
   const ws = useRef<WebSocket | null>(null);
   const dataChannel = useRef<RTCDataChannel | null>(null);
@@ -40,16 +40,17 @@ export default function VideoScreen({ setStream, vector, setIsConnected, setLoca
   const startLocalStream = async () => {
     try {
       const stream = await mediaDevices.getUserMedia({
-        audio: false,
+        audio: true,
         video: {
           facingMode: 'user',  // 'user' is front camera, 'environment' is back camera
-          width: 640,
-          height: 480,
+          width: 1280,
+          height: 720,
           frameRate: 30,
         },
       });
       // Add all tracks from local stream to peer connection
       stream.getTracks().forEach(track => {
+        console.log("adding track", track.getSettings())
         pc.current?.addTrack(track, stream);
       });
       // Optionally: store or show the local stream somewhere
@@ -150,10 +151,14 @@ export default function VideoScreen({ setStream, vector, setIsConnected, setLoca
     };
 
     return () => {
-      ws.current?.close();
+      console.log("Closing WebRTC connection");
+      dataChannel.current?.close();
+      pc.current?.getSenders().forEach(sender => sender.track?.stop());
       pc.current?.close();
-      ws.current = null;
+      ws.current?.close();
+      dataChannel.current = null;
       pc.current = null;
+      ws.current = null;
     };
   }, []);
 
