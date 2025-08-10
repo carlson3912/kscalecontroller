@@ -1,6 +1,7 @@
 import React from 'react';
 import 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { createStackNavigator } from '@react-navigation/stack';
 import Orientation from 'react-native-orientation-locker';
 import HomeScreen from './screens/HomeScreen'
@@ -29,7 +30,7 @@ function AppContainer() {
   const { theme } = useTheme(); // from ThemeContext
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.background }}>
       <NavigationContainer>
         <Stack.Navigator
           initialRouteName="Home"
@@ -49,7 +50,7 @@ function AppContainer() {
           <Stack.Screen name="AddRobot" component={AddRobotScreen} options={{ headerShown: false }} />
         </Stack.Navigator>
       </NavigationContainer>
-    </View>
+    </GestureHandlerRootView>
   );
 }
 

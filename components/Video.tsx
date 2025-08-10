@@ -1,12 +1,12 @@
 // App.tsx or VideoScreen.tsx
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { mediaDevices } from 'react-native-webrtc';
 import {
   RTCPeerConnection,
   RTCSessionDescription
 } from 'react-native-webrtc';
 
-const SIGNALING_URL = 'ws://10.33.12.68:8765'; // Match robot WebSocket server port
+ // Match robot WebSocket server port
 const configuration = {
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }], // Optional but recommended
 };
@@ -16,58 +16,53 @@ interface VideoProps {
   vector: { x: number; y: number; z: number };
   setIsConnected: (isConnected: boolean) => void;
   setLocalStream: (stream: any) => void;
+  call: boolean;
+  signalingUrl: string;
 }
 
-export default function VideoScreen({ setStream, vector, setIsConnected, setLocalStream }: VideoProps) {
- 
+export default function VideoScreen({ setStream, vector, setIsConnected, setLocalStream, call, signalingUrl }: VideoProps) {
   const pc = useRef<RTCPeerConnection | null>(null);
   const ws = useRef<WebSocket | null>(null);
   const dataChannel = useRef<RTCDataChannel | null>(null);
-  useEffect(() => {
-    const current = JSON.stringify(vector);
-    if (dataChannel.current?.readyState === 'open') {
-      console.log('Sending vector:', current);
-      dataChannel.current.send(current);
-    }
-    else{
-      console.log("Data channel not open");
-    }
-  }, [vector]);
 
-  useEffect(() => {
-    pc.current = new RTCPeerConnection(configuration);
-      // Capture front camera video
-  const startLocalStream = async () => {
+  // Shared function to get user media
+  const startLocalStream = useCallback(async () => {
     try {
       const stream = await mediaDevices.getUserMedia({
         audio: true,
         video: {
-          facingMode: 'user',  // 'user' is front camera, 'environment' is back camera
-          width: 1280,
-          height: 720,
+          facingMode: 'user',
+          width: 1920,
+          height: 1080,
           frameRate: 30,
         },
       });
-      // Add all tracks from local stream to peer connection
       stream.getTracks().forEach(track => {
-        console.log("adding track", track.getSettings())
+        console.log("adding track", track.getSettings());
         pc.current?.addTrack(track, stream);
       });
-      // Optionally: store or show the local stream somewhere
       setLocalStream(stream);
     } catch (e) {
       console.error('getUserMedia error:', e);
     }
-  };
+  }, [setLocalStream]);
 
-  startLocalStream();
+  // Shared function to set up peer connection
+  const setupPeerConnection = useCallback(async (withMedia: boolean = false) => {
+    pc.current = new RTCPeerConnection(configuration);
 
-    pc.current.ontrack = (event) => {
+    // If we need media, set it up immediately after PC creation
+    if (withMedia) {
+      await startLocalStream();
+    }
+
+    // Set up common event handlers
+    (pc.current as any).ontrack = (event: any) => {
       console.log('ontrack', event);
       setStream(event.streams[0]);
     };
 
-    pc.current.onicecandidate = (event) => {
+    (pc.current as any).onicecandidate = (event: any) => {
       if (event.candidate && ws.current) {
         ws.current.send(JSON.stringify({
           ice: {
@@ -78,35 +73,40 @@ export default function VideoScreen({ setStream, vector, setIsConnected, setLoca
       }
     };
 
-    pc.current.ondatachannel = (event) => {
+    (pc.current as any).ondatachannel = (event: any) => {
       console.log('Data channel received:', event.channel.label);
       dataChannel.current = event.channel;
 
-      dataChannel.current.onmessage = (msg) => {
-        console.log('Message from robot:', msg.data);
-      };
+      if (dataChannel.current) {
+        dataChannel.current.onmessage = (msg: any) => {
+          console.log('Message from robot:', msg.data);
+        };
 
-      dataChannel.current.onopen = () => {
-        console.log('Data channel opened');
-      };
+        dataChannel.current.onopen = () => {
+          console.log('Data channel opened');
+        };
 
-      dataChannel.current.onclose = () => {
-        console.log('Data channel closed');
-      };
+        dataChannel.current.onclose = () => {
+          console.log('Data channel closed');
+        };
+      }
     };
-    // Setup WebSocket connection
-    ws.current = new WebSocket(SIGNALING_URL);
+  }, [setStream, startLocalStream]);
+
+  // Shared function to set up WebSocket
+  const setupWebSocket = useCallback(() => {
+    console.log("signalingUrl", "ws://" + signalingUrl + ":8765");
+    ws.current = new WebSocket("ws://" + signalingUrl + ":8765");
 
     ws.current.onopen = () => {
       console.log('WebSocket connected');
       setIsConnected(true);
-      ws.current?.send('HELLO'); // Send initial HELLO
+      ws.current?.send('HELLO');
     };
 
     ws.current.onmessage = async (event) => {
       const message = JSON.parse(event.data);
 
-      // Handle SDP offer
       if (message.sdp?.type === 'offer') {
         console.log('Received offer');
         const offerDesc = new RTCSessionDescription({
@@ -118,7 +118,6 @@ export default function VideoScreen({ setStream, vector, setIsConnected, setLoca
         const answer = await pc.current?.createAnswer();
         await pc.current?.setLocalDescription(answer);
 
-        // Send the answer back
         ws.current?.send(JSON.stringify({
           sdp: {
             type: 'answer',
@@ -127,7 +126,6 @@ export default function VideoScreen({ setStream, vector, setIsConnected, setLoca
         }));
       }
 
-      // Handle incoming ICE candidates from robot
       if (message.ice) {
         try {
           await pc.current?.addIceCandidate({
@@ -140,8 +138,7 @@ export default function VideoScreen({ setStream, vector, setIsConnected, setLoca
       }
     };
 
-    ws.current.onerror = (error) => {
-      console.error('WebSocket error:', error);
+    ws.current.onerror = () => {
       setIsConnected(false);
     };
 
@@ -149,18 +146,59 @@ export default function VideoScreen({ setStream, vector, setIsConnected, setLoca
       console.log('WebSocket connection closed');
       setIsConnected(false);
     };
+  }, [setIsConnected]);
 
-    return () => {
-      console.log("Closing WebRTC connection");
-      dataChannel.current?.close();
-      pc.current?.getSenders().forEach(sender => sender.track?.stop());
-      pc.current?.close();
-      ws.current?.close();
-      dataChannel.current = null;
-      pc.current = null;
-      ws.current = null;
-    };
+  // Shared cleanup function
+  const cleanup = useCallback(() => {
+    console.log("Cleaning up WebRTC connection");
+    if(dataChannel.current) {
+      dataChannel.current.close();
+    }
+    pc.current?.getSenders().forEach(sender => sender.track?.stop());
+    pc.current?.close();
+    dataChannel.current = null;
+    pc.current = null;
   }, []);
+
+
+  useEffect(() => {
+  
+    return () => {
+      cleanup();
+    }
+  }, [])
+
+  const renegotiate = useCallback(async() => {
+    if(pc.current) {
+      cleanup();
+    }
+    await setupPeerConnection(call);
+    if(!ws.current) {
+      console.log("Setting up WebSocket");
+      setupWebSocket();
+    }
+    else{
+      console.log("Sending HELLO");
+      ws.current?.send('HELLO');
+    }
+
+  }, [call])
+
+  useEffect(() => {
+    renegotiate();
+  }, [call]);
+
+  // Handle vector updates
+  useEffect(() => {
+    const current = JSON.stringify(vector);
+    if (dataChannel.current?.readyState === 'open') {
+      // console.log('Sending vector:', current);
+      dataChannel.current.send(current);
+    }
+    else {
+      console.log("Data channel not open");
+    }
+  }, [vector]);
 
   return null; // This component just handles signaling & WebRTC
 }

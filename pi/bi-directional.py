@@ -7,7 +7,7 @@ import gi
 gi.require_version('Gst', '1.0')
 gi.require_version('GstWebRTC', '1.0')
 gi.require_version('GstSdp', '1.0')
-from gi.repository import Gst, GstWebRTC, GstSdp
+from gi.repository import Gst, GstWebRTC, GstSdp, GLib
 
 Gst.init(None)
 
@@ -15,9 +15,16 @@ PIPELINE_DESC = '''
 webrtcbin name=sendrecv bundle-policy=max-bundle stun-server=stun://stun.l.google.com:19302
  libcamerasrc ! capsfilter caps=video/x-raw,format=YUY2,width=640,height=480,framerate=30/1 ! videoconvert ! queue ! vp8enc name=vp8enc0 deadline=1 ! rtpvp8pay !
  queue ! application/x-rtp,media=video,encoding-name=VP8,payload=97 ! sendrecv.
- alsasrc device=hw:2,0 ! audioconvert ! audioresample ! queue ! opusenc ! rtpopuspay !
+ alsasrc device=hw:0,0 ! audioconvert ! audioresample ! queue ! opusenc ! rtpopuspay !
  queue ! application/x-rtp,media=audio,encoding-name=OPUS,payload=96 ! sendrecv.
 '''
+async def glib_main_loop_iteration():
+    while True:
+        # Process all pending GLib events without blocking
+        while GLib.main_context_default().iteration(False):
+            pass
+        # Yield control back to asyncio, adjust delay as needed
+        await asyncio.sleep(0.01)
 
 class WebRTCServer:
     def __init__(self, loop):
@@ -27,15 +34,34 @@ class WebRTCServer:
         self.loop = loop
 
     def start_pipeline(self):
+        print("Starting pipeline")
         self.pipe = Gst.parse_launch(PIPELINE_DESC)
+        bus = self.pipe.get_bus()
+        bus.add_signal_watch()
+        bus.connect("message", self.on_bus_message)
+        self.vp8enc = self.pipe.get_by_name("vp8enc0")
+        self.vp8enc.set_property("keyframe-max-dist", 30)
         self.webrtc = self.pipe.get_by_name("sendrecv")
+        self.webrtc.set_property("latency", 200) 
         self.webrtc.connect("on-negotiation-needed", self.on_negotiation_needed)
         self.webrtc.connect("on-ice-candidate", self.send_ice_candidate_message)
         self.webrtc.connect("on-data-channel", self.on_data_channel)
         self.webrtc.connect("pad-added", self.on_incoming_stream) 
-        self.vp8enc = self.pipe.get_by_name("vp8enc0")
-        self.vp8enc.set_property("keyframe-max-dist", 30)
         self.pipe.set_state(Gst.State.PLAYING)
+
+    def on_bus_message(self, bus, message):
+        """Handle messages from the GStreamer bus, specifically for latency."""
+        t = message.type
+        if t == Gst.MessageType.LATENCY:
+            print("Received a LATENCY message. Recalculating latency.")
+            self.pipe.recalculate_latency()
+
+        return GLib.SOURCE_CONTINUE
+    def close_pipeline(self):
+        if self.pipe:
+            self.pipe.set_state(Gst.State.NULL)
+            self.pipe = None
+            self.webrtc = None
 
     def on_message_string(self, channel, message):
         print("Received:", message)
@@ -46,7 +72,7 @@ class WebRTCServer:
 
     def on_incoming_decodebin_stream(self, _, pad):
         if not pad.has_current_caps():
-            print (pad, 'has no caps, ignoring')
+            print(pad, 'has no caps, ignoring')
             return
 
         caps = pad.get_current_caps()
@@ -57,25 +83,48 @@ class WebRTCServer:
         if name.startswith('video'):
             q = Gst.ElementFactory.make('queue')
             conv = Gst.ElementFactory.make('videoconvert')
-            sink = Gst.ElementFactory.make('autovideosink')
+            scale = Gst.ElementFactory.make('videoscale')
+            capsfilter = Gst.ElementFactory.make('capsfilter')
+            sink = Gst.ElementFactory.make('glimagesink')
+
+            # Set the capsfilter to 1920x1080
+            capsfilter.set_property('caps', Gst.Caps.from_string('video/x-raw,width=1920,height=1080'))
+
+            # Add all to pipeline
             self.pipe.add(q)
             self.pipe.add(conv)
+            self.pipe.add(scale)
+            self.pipe.add(capsfilter)
             self.pipe.add(sink)
-            self.pipe.sync_children_states()
+
+            # Sync states for new elements
+            q.sync_state_with_parent()
+            conv.sync_state_with_parent()
+            scale.sync_state_with_parent()
+            capsfilter.sync_state_with_parent()
+            sink.sync_state_with_parent()
+
+            # Link elements: pad -> q -> conv -> scale -> capsfilter -> sink
             pad.link(q.get_static_pad('sink'))
             q.link(conv)
-            conv.link(sink)
+            conv.link(scale)
+            scale.link(capsfilter)
+            capsfilter.link(sink)
         elif name.startswith('audio'):
+            # unchanged
             q = Gst.ElementFactory.make('queue')
             conv = Gst.ElementFactory.make('audioconvert')
             resample = Gst.ElementFactory.make('audioresample')
             sink = Gst.ElementFactory.make('alsasink')
-            sink.set_property('device', 'plughw:2,0')
+            sink.set_property('device', 'plughw:0,0')
             self.pipe.add(q)
             self.pipe.add(conv)
             self.pipe.add(resample)
             self.pipe.add(sink)
-            self.pipe.sync_children_states()
+            q.sync_state_with_parent()
+            conv.sync_state_with_parent()
+            resample.sync_state_with_parent()
+            sink.sync_state_with_parent()
             pad.link(q.get_static_pad('sink'))
             q.link(conv)
             conv.link(resample)
@@ -84,7 +133,6 @@ class WebRTCServer:
     def on_incoming_stream(self, _, pad):
         if pad.direction != Gst.PadDirection.SRC:
             return
-
         decodebin = Gst.ElementFactory.make('decodebin')
         decodebin.connect('pad-added', self.on_incoming_decodebin_stream)
         self.pipe.add(decodebin)
@@ -122,7 +170,11 @@ class WebRTCServer:
         print("Handling client message")
         print(message)
         if(message == "HELLO"):
+            if(self.pipe):
+                self.close_pipeline()
+           
             self.start_pipeline()
+       
             return
         msg = json.loads(message)
         if 'sdp' in msg and msg['sdp']['type'] == 'answer':
@@ -148,7 +200,7 @@ async def main():
     server = WebRTCServer(loop)
     async def handler(websocket):
         await server.websocket_handler(websocket)
-
+    asyncio.create_task(glib_main_loop_iteration())
     async with websockets.serve(handler, "0.0.0.0", 8765):
         print("WebSocket server running on ws://0.0.0.0:8765")
         await asyncio.Future()  # run forever

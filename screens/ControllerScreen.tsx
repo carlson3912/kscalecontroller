@@ -7,14 +7,17 @@ import {
   TextInput,
   Modal,
   Switch,
+  Image,
 } from 'react-native';
 import {Joystick2D} from '../components/Joystick';
 import {Slider1D} from '../components/Slider';
+import { PanGestureHandler } from 'react-native-gesture-handler';
 import { useFocusEffect } from '@react-navigation/native';
 import Orientation from 'react-native-orientation-locker';
 import { useTheme } from '../components/ThemeContext';
 import VideoScreen from '../components/Video';
-import { RTCView } from 'react-native-webrtc';
+import videocallIcon from '../assets/images/videocall.png';
+import { RTCView, MediaStream } from 'react-native-webrtc';
 
 interface Robot {
   id: string;
@@ -34,15 +37,18 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
   const [slider1D, setSlider1D] = useState(0);
   const [joystick2D, setJoystick2D] = useState({x: 0, y: 0});
   const [showSettings, setShowSettings] = useState(false);
-  const [stream, setStream] = useState(null);
-  const [localStream, setLocalStream] = useState(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [scale, setScale] = useState('1.0');
   const [vector, setVector] = useState({x: 0, y: 0, z: 0});
   const [showLocalStream, setShowLocalStream] = useState(false); // NEW: Toggle for local stream
   const joystick2DRef = useRef({x: 0, y: 0});
   const slider1DRef = useRef(0);
   const scaleRef = useRef('1.0');
-
+  const [call, setCall] = useState(false);
+  // gesture handler refs for simultaneous gestures
+  const joystickHandlerRef = useRef(null);
+  const sliderHandlerRef = useRef(null);
   const robot: Robot = route.params?.robot || {
     id: '1',
     name: 'Default Robot',
@@ -75,7 +81,7 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
     scaleRef.current = scale;
   }, [scale]);
 
-  const sendVector = () => {
+  const sendVector = useCallback(() => {
     // Use ref values instead of state values
     const currentJoystick = joystick2DRef.current;
     const currentSlider = slider1DRef.current;
@@ -87,7 +93,7 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
         z: currentSlider * currentScale
     };
     setVector(vectorData);
-  };
+  }, []);
 
   const openSettings = () => {
     setShowSettings(true);
@@ -111,7 +117,7 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
       )}
       
       {/* VideoScreen component - handles WebRTC setup */}
-      <VideoScreen setStream={setStream} vector={vector} setIsConnected={setIsConnected} setLocalStream={setLocalStream} showLocalStream={showLocalStream} />
+      <VideoScreen setStream={setStream} vector={vector} setIsConnected={setIsConnected} setLocalStream={setLocalStream} call={call} signalingUrl={robot.ip} />
       
       {/* Top Controls - Settings and Back at the very top */}
       <View style={styles.topControls}>
@@ -141,14 +147,39 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
         </View>
       )}
 
-      {/* Bottom Joysticks */}  
-      <View style={styles.bottomJoysticks}>
-        <Joystick2D joystick2D={joystick2D} setJoystick2D={setJoystick2D} />
-        <View style={styles.rightControls}>
+      {/* Bottom Controls - Restructured with left and right containers */}
+      <View style={styles.bottomControls}>
+        {/* Left Side Controls */}
+        <View style={styles.leftSideControls}>
+          <View style={styles.callButtonContainer}>
+            <TouchableOpacity
+              style={[styles.callButton, { backgroundColor: theme.highlight }]}
+              onPress={() => setCall(prev => !prev)}
+              activeOpacity={0.8}
+            >
+              <Image source={videocallIcon} style={styles.callIcon} resizeMode="contain" />
+            </TouchableOpacity>
+          </View>
+          <Joystick2D
+            joystick2D={joystick2D}
+            setJoystick2D={setJoystick2D}
+            handlerRef={joystickHandlerRef}
+            simultaneousHandlers={[sliderHandlerRef]}
+          />
+          
+        </View>
+
+        {/* Right Side Controls */}
+        <View style={styles.rightSideControls}>
           <TouchableOpacity style={[styles.stopButton, { backgroundColor: theme.warning }]}>
             <Text style={[styles.stopButtonText, { color: theme.primary }]}>STOP</Text>
           </TouchableOpacity>
-          <Slider1D slider1D={slider1D} setSlider1D={setSlider1D} />
+          <Slider1D
+            slider1D={slider1D}
+            setSlider1D={setSlider1D}
+            handlerRef={sliderHandlerRef}
+            simultaneousHandlers={[joystickHandlerRef]}
+          />
         </View>
       </View>
 
@@ -224,8 +255,8 @@ const styles = StyleSheet.create({
   // NEW: Local Stream Styles
   localStreamContainer: {
     position: 'absolute',
-    bottom: 200, // Position above the stop button
-    right: 20, // Same right padding as bottomJoysticks
+    bottom: 200, // Position above the controls
+    right: 20, // Same right padding as bottomControls
     zIndex: 3, // Above video and controls
   },
   localStream: {
@@ -242,6 +273,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  callButtonContainer: {
+    position: 'absolute',
+    bottom: 130,
+    zIndex: 3,
   },
   topControls: {
     flexDirection: 'row',
@@ -303,16 +339,21 @@ const styles = StyleSheet.create({
   buttonText: {
     fontWeight: 'bold',
   },
-  bottomJoysticks: {
+  bottomControls: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 20, // This is the padding we're matching
+    padding: 20,
     flex: 1,
     alignItems: 'flex-end',
     zIndex: 2, // Controls above video
   },
-  rightControls: {
+  leftSideControls: {
+    alignItems: 'flex-start',
+    flex: 1,
+  },
+  rightSideControls: {
     alignItems: 'flex-end',
+    flex: 1,
   },
   stopButton: {
     paddingHorizontal: 30,
@@ -385,6 +426,25 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
+  callButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  callIcon: {
+    width: 40,
+    height: 40,
+    tintColor: '#FFFFFF',
+  },
+
 });
 
 export default ControllerScreen; 

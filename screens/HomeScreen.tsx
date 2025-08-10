@@ -22,7 +22,7 @@ function HomeScreen({ navigation }: HomeScreenProps) {
       
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={[styles.title, {color: theme.primary}]}>K-Scale</Text>
+          <Text style={[styles.title, {color: theme.primary}]}>KScale</Text>
           <Text style={[styles.subtitle, {color: theme.secondary}]}>Calibrate, Update and Control your robots</Text>
         </View>
 

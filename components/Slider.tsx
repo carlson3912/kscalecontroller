@@ -1,12 +1,18 @@
-import React from 'react';
-import { View, PanResponder, StyleSheet } from 'react-native';
+import React, { useCallback } from 'react';
+import { View, StyleSheet } from 'react-native';
+import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-gesture-handler';
 
 type Slider1DProps = {
     slider1D: number;
     setSlider1D: (slider1D: number) => void;
 }
 
-export const Slider1D = ({slider1D, setSlider1D}: Slider1DProps) => {
+type HandlerProps = {
+  handlerRef?: React.Ref<any>;
+  simultaneousHandlers?: any;
+};
+
+export const Slider1D = ({slider1D, setSlider1D, ...rest}: Slider1DProps & HandlerProps) => {
   
     const sliderWidth = 200;
     const sliderHeight = 40;
@@ -14,20 +20,7 @@ export const Slider1D = ({slider1D, setSlider1D}: Slider1DProps) => {
     const maxDistance = (sliderWidth - knobSize) / 2;
     const centerX = sliderWidth / 2;
 
-    const panResponder = PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderMove: (evt, gestureState) => {
-        const {dx} = gestureState;
-        updateSlider1D(dx);
-      },
-      onPanResponderRelease: (evt, gestureState) => {
-        setSlider1D(0);
-      },
-      onPanResponderTerminate: () => {
-        setSlider1D(0);
-      },
-    });
+   
 
     const updateSlider1D = (dx: number) => {
         // dx is already relative to initial touch
@@ -45,17 +38,34 @@ export const Slider1D = ({slider1D, setSlider1D}: Slider1DProps) => {
           setSlider1D(normalizedX/100);
         }
       };
-
+      const onGestureEvent = useCallback((event: PanGestureHandlerGestureEvent) => {
+        const { translationX } = event.nativeEvent as any;
+        updateSlider1D(translationX);
+      }, [updateSlider1D]);
+  
+      const onHandlerStateChange = useCallback((event: PanGestureHandlerGestureEvent) => {
+        const { state } = event.nativeEvent as any;
+        if (state === 5 || state === 3) {
+          setSlider1D(0);
+        }
+      }, [setSlider1D]);
     return (
-      <View style={[styles.slider1D, {width: sliderWidth, height: sliderHeight}]}>
-        <View style={[styles.sliderTrack, {width: sliderWidth, height: sliderHeight}]} {...panResponder.panHandlers}>
-          <View style={[styles.sliderKnob, {
-            width: knobSize,
-            height: knobSize,
-            left: centerX + slider1D * 100 - knobSize / 2,
-            top: (sliderHeight - knobSize) / 2,
-          }]} />
-        </View>
+      <View style={[styles.slider1D, {width: sliderWidth, height: sliderHeight}]}> 
+        <PanGestureHandler
+          ref={(rest as any).handlerRef}
+          simultaneousHandlers={(rest as any).simultaneousHandlers}
+          onGestureEvent={onGestureEvent}
+          onHandlerStateChange={onHandlerStateChange}
+        >
+          <View style={[styles.sliderTrack, {width: sliderWidth, height: sliderHeight}]}> 
+            <View style={[styles.sliderKnob, {
+              width: knobSize,
+              height: knobSize,
+              left: centerX + slider1D * 100 - knobSize / 2,
+              top: (sliderHeight - knobSize) / 2,
+            }]} />
+          </View>
+        </PanGestureHandler>
       </View>
     );
   };
