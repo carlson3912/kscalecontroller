@@ -16,7 +16,12 @@ import { useFocusEffect } from '@react-navigation/native';
 import Orientation from 'react-native-orientation-locker';
 import { useTheme } from '../components/ThemeContext';
 import VideoScreen from '../components/Video';
-import videocallIcon from '../assets/images/videocall.png';
+import SimUDP from '../components/SimUDP';
+import startCallIcon from '../assets/images/start-call.png';
+import endCallIcon from '../assets/images/end-call.png';
+import boxingIcon from '../assets/images/boxing.webp';
+import saluteIcon from '../assets/images/salute.webp';
+import zombieIcon from '../assets/images/zombie.webp';
 import { RTCView, MediaStream } from 'react-native-webrtc';
 
 interface Robot {
@@ -42,11 +47,13 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
   const [scale, setScale] = useState('1.0');
   const [vector, setVector] = useState({x: 0, y: 0, z: 0});
   const [showLocalStream, setShowLocalStream] = useState(false); // NEW: Toggle for local stream
+  const [payload, setPayload] = useState<string | null>(null);
+  const [simStop, setSimStop] = useState(0);
   const joystick2DRef = useRef({x: 0, y: 0});
   const slider1DRef = useRef(0);
   const scaleRef = useRef('1.0');
   const [call, setCall] = useState(false);
-  // gesture handler refs for simultaneous gestures
+  const [showEditModal, setShowEditModal] = useState(false);  // gesture handler refs for simultaneous gestures
   const joystickHandlerRef = useRef(null);
   const sliderHandlerRef = useRef(null);
   const robot: Robot = route.params?.robot || {
@@ -55,6 +62,7 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
     status: 'online',
     ip: '10.33.12.44:8765'
   };
+  const simulate: boolean = route.params?.simulate || false;
 
   useFocusEffect(
     useCallback(() => {
@@ -81,6 +89,16 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
     scaleRef.current = scale;
   }, [scale]);
 
+  // Clear payload after sending
+  useEffect(() => {
+    if (payload) {
+      const timer = setTimeout(() => {
+        setPayload(null);
+      }, 100); // Clear after 100ms
+      return () => clearTimeout(timer);
+    }
+  }, [payload]);
+
   const sendVector = useCallback(() => {
     // Use ref values instead of state values
     const currentJoystick = joystick2DRef.current;
@@ -103,6 +121,14 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
     setShowSettings(false);
   };
 
+  const openEditModal = () => {
+    setShowEditModal(true);
+  };
+
+  const closeEditModal = () => {
+    setShowEditModal(false);
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Video Background - Positioned absolutely to cover entire screen */}
@@ -117,13 +143,18 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
       )}
       
       {/* VideoScreen component - handles WebRTC setup */}
-      <VideoScreen setStream={setStream} vector={vector} setIsConnected={setIsConnected} setLocalStream={setLocalStream} call={call} signalingUrl={robot.ip} />
-      
+      {!simulate ? (
+        <VideoScreen setStream={setStream} vector={vector} setIsConnected={setIsConnected} setLocalStream={setLocalStream} call={call} signalingUrl={robot.ip} />
+      ) : (
+        <SimUDP vector={vector} payload={payload} simStop={simStop} />
+      )}
+
       {/* Top Controls - Settings and Back at the very top */}
       <View style={styles.topControls}>
         <TouchableOpacity onPress={() => {navigation.goBack()}}>
           <Text style={[styles.backButton, { color: theme.highlight }]}>←</Text>
         </TouchableOpacity>
+        
         <View style={styles.topRight}>
           <Text style={[styles.statusText, { color: isConnected ? "green" : theme.warning }]}>
             {isConnected ? 'Connected' : 'Disconnected'}
@@ -135,43 +166,86 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
         </View>
       </View>
 
-      {/* NEW: Local Stream Preview - Above Stop Button */}
-      {showLocalStream && localStream && (
-        <View style={styles.localStreamContainer}>
-          <RTCView 
-            streamURL={localStream.toURL()} 
-            style={styles.localStream}
-            objectFit="cover"
-          />
-          <View style={styles.localStreamBorder} />
-        </View>
-      )}
 
       {/* Bottom Controls - Restructured with left and right containers */}
       <View style={styles.bottomControls}>
         {/* Left Side Controls */}
         <View style={styles.leftSideControls}>
-          <View style={styles.callButtonContainer}>
+          <View style={styles.actionButtonsContainer}>
             <TouchableOpacity
-              style={[styles.callButton, { backgroundColor: theme.highlight }]}
+              style={styles.callButton}
               onPress={() => setCall(prev => !prev)}
               activeOpacity={0.8}
             >
-              <Image source={videocallIcon} style={styles.callIcon} resizeMode="contain" />
+              <Image 
+                source={call ? endCallIcon : startCallIcon} 
+                style={styles.callIcon} 
+                resizeMode="contain" 
+              />
             </TouchableOpacity>
           </View>
-          <Joystick2D
-            joystick2D={joystick2D}
-            setJoystick2D={setJoystick2D}
-            handlerRef={joystickHandlerRef}
-            simultaneousHandlers={[sliderHandlerRef]}
-          />
+          
+          <View style={styles.joystickContainer}>
+            <Joystick2D
+              joystick2D={joystick2D}
+              setJoystick2D={setJoystick2D}
+              handlerRef={joystickHandlerRef}
+              simultaneousHandlers={[sliderHandlerRef]}
+            />
+            
+            {/* Action Circles Container */}
+            <View style={[styles.actionCirclesContainer, { backgroundColor: theme.card }]}>
+              <TouchableOpacity
+                style={[styles.actionCircle, { backgroundColor: theme.highlight }]}
+                onPress={() => setPayload("boxing")}
+                activeOpacity={0.8}
+              >
+                <Image 
+                  source={boxingIcon} 
+                  style={styles.actionCircleImage} 
+                  resizeMode="contain" 
+                />
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.actionCircle, { backgroundColor: theme.highlight }]}
+                onPress={() => setPayload("salute")}
+                activeOpacity={0.8}
+              >
+                <Image 
+                  source={saluteIcon} 
+                  style={styles.actionCircleImage} 
+                  resizeMode="contain" 
+                />
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.actionCircle, { backgroundColor: theme.highlight }]}
+                onPress={() => setPayload("zombie_walk")}
+                activeOpacity={0.8}
+              >
+                <Image 
+                  source={zombieIcon} 
+                  style={styles.actionCircleImage} 
+                  resizeMode="contain" 
+                />
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.actionCircle, { backgroundColor: theme.secondary }]}
+                onPress={openEditModal}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.actionCircleText, { color: theme.primary }]}>✏️</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
           
         </View>
 
         {/* Right Side Controls */}
         <View style={styles.rightSideControls}>
-          <TouchableOpacity style={[styles.stopButton, { backgroundColor: theme.warning }]}>
+          <TouchableOpacity style={[styles.stopButton, { backgroundColor: theme.warning }]} onPress={() => setSimStop(prev => prev + 1)}>
             <Text style={[styles.stopButtonText, { color: theme.primary }]}>STOP</Text>
           </TouchableOpacity>
           <Slider1D
@@ -230,6 +304,65 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
           </View>
         </View>
       </Modal>
+
+      {/* Edit Modal */}
+      <Modal
+        visible={showEditModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeEditModal}
+      >
+        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}>
+          <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.primary }]}>Edit Actions</Text>
+              <TouchableOpacity onPress={closeEditModal}>
+                <Text style={[styles.closeButton, { color: theme.secondary }]}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.editModalContent}>
+              <Text style={[styles.editDescription, { color: theme.secondary }]}>
+                Customize your action buttons and create custom commands for your robot.
+              </Text>
+              
+              <View style={styles.actionPreview}>
+                <Text style={[styles.previewLabel, { color: theme.primary }]}>Current Actions:</Text>
+                <View style={styles.previewActions}>
+                  <View style={[styles.previewAction, { backgroundColor: theme.background }]}>
+                    <Image 
+                      source={boxingIcon} 
+                      style={styles.previewImage} 
+                      resizeMode="contain" 
+                    />
+                    <Text style={[styles.previewText, { color: theme.secondary }]}>Boxing</Text>
+                  </View>
+                  <View style={[styles.previewAction, { backgroundColor: theme.background }]}>
+                    <Image 
+                      source={saluteIcon} 
+                      style={styles.previewImage} 
+                      resizeMode="contain" 
+                    />
+                    <Text style={[styles.previewText, { color: theme.secondary }]}>Salute</Text>
+                  </View>
+                  <View style={[styles.previewAction, { backgroundColor: theme.background }]}>
+                    <Image 
+                      source={zombieIcon} 
+                      style={styles.previewImage} 
+                      resizeMode="contain" 
+                    />
+                    <Text style={[styles.previewText, { color: theme.secondary }]}>Zombie Walk</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity style={[styles.saveButton, { backgroundColor: theme.highlight }]} onPress={closeEditModal}>
+              <Text style={[styles.saveButtonText, { color: theme.primary }]}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -274,7 +407,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  callButtonContainer: {
+  actionButtonsContainer: {
     position: 'absolute',
     bottom: 130,
     zIndex: 3,
@@ -287,6 +420,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 8,
     zIndex: 2, // Controls above video
+  },
+  topCenter: {
+    flex: 1,
+    alignItems: 'center',
   },
   backButton: {
     fontSize: 24,
@@ -427,22 +564,104 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   callButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 40,
+    height: 40,
     marginTop: 20,
+  },
+  callIcon: {
+    width: 40,
+    height: 40,
+  },
+  punchButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
   },
-  callIcon: {
+  punchButtonText: {
+    fontWeight: 'bold',
+    fontSize: 16,
+    textTransform: 'uppercase',
+  },
+  joystickContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+  },
+  actionCirclesContainer: {
+    flexDirection: 'row',
+    marginLeft: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  actionCircle: {
     width: 40,
     height: 40,
-    tintColor: '#FFFFFF',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  actionCircleText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  actionCircleImage: {
+    width: 28,
+    height: 28,
+  },
+  editModalContent: {
+    marginBottom: 16,
+  },
+  editDescription: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  actionPreview: {
+    marginBottom: 16,
+  },
+  previewLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  previewActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  previewAction: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    minWidth: 60,
+  },
+  previewImage: {
+    width: 24,
+    height: 24,
+    marginBottom: 4,
+  },
+  previewText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
 
 });

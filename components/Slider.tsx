@@ -26,7 +26,7 @@ export const Slider1D = ({slider1D, setSlider1D, ...rest}: Slider1DProps & Handl
         // dx is already relative to initial touch
         // We need to convert it to slider coordinates
         
-        const newX = slider1D*100 + dx;
+        const newX = dx;
         const distance = Math.abs(newX);
         
         if (distance <= maxDistance) {

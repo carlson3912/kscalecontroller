@@ -36,8 +36,8 @@ function RobotsScreen({ navigation }: RobotsScreenProps) {
     }, [])
   );
 
-  const handleManualControl = (robot: any) => {
-    navigation.navigate('Controller', { robot });
+  const handleManualControl = (robot: any, simulate: boolean = false) => {
+    navigation.navigate('Controller', { robot, simulate });
   };
 
   const handleAddNewRobot = () => {
@@ -136,17 +136,23 @@ function RobotsScreen({ navigation }: RobotsScreenProps) {
               <Text style={[styles.robotIp, { color: theme.secondary }]}>{robot.ip}</Text>
             </View>
             <View style={styles.robotButtons}>
-              <TouchableOpacity 
+              {/* <TouchableOpacity 
                 style={styles.robotButton}
                 onPress={() => navigation.navigate('Calibrate', { robot })}
               >
                 <Text style={[styles.robotButtonText, { color: theme.highlight }]}>Calibrate →</Text>
+              </TouchableOpacity> */}
+              <TouchableOpacity 
+                style={styles.robotButton}
+                onPress={() => handleManualControl(robot, true)}
+              >
+                <Text style={[styles.robotButtonText, { color: theme.highlight }]}>Simulate →</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.robotButton} 
-                onPress={() => handleManualControl(robot)}
+                onPress={() => handleManualControl(robot, false)}
               >
-                <Text style={[styles.robotButtonText, { color: theme.highlight }]}>Manual Control →</Text>
+                <Text style={[styles.robotButtonText, { color: theme.highlight }]}>Control →</Text>
               </TouchableOpacity>
             </View>
           </View>
