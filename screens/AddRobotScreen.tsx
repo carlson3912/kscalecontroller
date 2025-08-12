@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
@@ -8,6 +7,7 @@ import {
   View,
   TextInput,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { RobotStorage } from '../utils/storage';
 import { useTheme } from '../components/ThemeContext';
 

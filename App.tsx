@@ -3,6 +3,7 @@ import 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { createStackNavigator } from '@react-navigation/stack';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Orientation from 'react-native-orientation-locker';
 import HomeScreen from './screens/HomeScreen'
 import ControllerScreen from './screens/ControllerScreen';
@@ -20,9 +21,11 @@ function App() {
   }, []);
 
   return (
-    <ThemeProvider>
-      <AppContainer />
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AppContainer />
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
 

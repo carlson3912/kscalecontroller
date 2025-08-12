@@ -1,5 +1,6 @@
 // App.tsx or VideoScreen.tsx
 import { useEffect, useRef, useCallback } from 'react';
+import InCallManager from 'react-native-incall-manager';
 import { mediaDevices } from 'react-native-webrtc';
 import {
   RTCPeerConnection,
@@ -24,7 +25,15 @@ export default function VideoScreen({ setStream, vector, setIsConnected, setLoca
   const pc = useRef<RTCPeerConnection | null>(null);
   const ws = useRef<WebSocket | null>(null);
   const dataChannel = useRef<RTCDataChannel | null>(null);
-
+  useEffect(() => {
+      InCallManager.start({ media: 'audio' });
+      InCallManager.setSpeakerphoneOn(true);
+   
+  
+    return () => {
+      InCallManager.stop();
+    };
+  }, [call]);
   // Shared function to get user media
   const startLocalStream = useCallback(async () => {
     try {

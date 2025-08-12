@@ -8,7 +8,9 @@ import {
   Modal,
   Switch,
   Image,
+  useWindowDimensions,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {Joystick2D} from '../components/Joystick';
 import {Slider1D} from '../components/Slider';
 import { PanGestureHandler } from 'react-native-gesture-handler';
@@ -38,6 +40,9 @@ interface ControllerScreenProps {
 
 function ControllerScreen({ navigation, route }: ControllerScreenProps) {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const isPortrait = height >= width;
   const [isConnected, setIsConnected] = useState(false);
   const [slider1D, setSlider1D] = useState(0);
   const [joystick2D, setJoystick2D] = useState({x: 0, y: 0});
@@ -130,7 +135,9 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, { 
+      backgroundColor: theme.background,
+    }]}>
       {/* Video Background - Positioned absolutely to cover entire screen */}
       {stream && (
         <View style={styles.videoContainer}>
@@ -149,8 +156,12 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
         <SimUDP vector={vector} payload={payload} simStop={simStop} />
       )}
 
-      {/* Top Controls - Settings and Back at the very top */}
-      <View style={styles.topControls}>
+      {/* Top Controls - Settings and Back respecting safe area */}
+      <View style={[styles.topControls, { 
+        paddingTop: insets.top,
+        paddingLeft: insets.left,
+        paddingRight: insets.right,
+      }]}>
         <TouchableOpacity onPress={() => {navigation.goBack()}}>
           <Text style={[styles.backButton, { color: theme.highlight }]}>←</Text>
         </TouchableOpacity>
@@ -168,7 +179,11 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
 
 
       {/* Bottom Controls - Restructured with left and right containers */}
-      <View style={styles.bottomControls}>
+      <View style={[styles.bottomControls, { 
+        paddingBottom: insets.bottom,
+        paddingLeft: insets.left,
+        paddingRight: insets.right,
+      }]}>
         {/* Left Side Controls */}
         <View style={styles.leftSideControls}>
           <View style={styles.actionButtonsContainer}>
@@ -194,6 +209,7 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
             />
             
             {/* Action Circles Container */}
+            {!isPortrait && (
             <View style={[styles.actionCirclesContainer, { backgroundColor: theme.card }]}>
               <TouchableOpacity
                 style={[styles.actionCircle, { backgroundColor: theme.highlight }]}
@@ -239,6 +255,7 @@ function ControllerScreen({ navigation, route }: ControllerScreenProps) {
                 <Text style={[styles.actionCircleText, { color: theme.primary }]}>✏️</Text>
               </TouchableOpacity>
             </View>
+            )}
           </View>
           
         </View>
@@ -416,8 +433,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 10,
-    paddingHorizontal: 16,
     paddingBottom: 8,
     zIndex: 2, // Controls above video
   },
@@ -479,7 +494,7 @@ const styles = StyleSheet.create({
   bottomControls: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 20,
+    paddingTop: 20,
     flex: 1,
     alignItems: 'flex-end',
     zIndex: 2, // Controls above video

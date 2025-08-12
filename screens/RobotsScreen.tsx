@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
@@ -11,6 +10,7 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { RobotStorage } from '../utils/storage';
 import { Robot } from '../utils/storage';
 import { useTheme } from '../components/ThemeContext';
@@ -143,16 +143,16 @@ function RobotsScreen({ navigation }: RobotsScreenProps) {
                 <Text style={[styles.robotButtonText, { color: theme.highlight }]}>Calibrate →</Text>
               </TouchableOpacity> */}
               <TouchableOpacity 
-                style={styles.robotButton}
+                style={[styles.robotButton, { backgroundColor: theme.highlight }]}
                 onPress={() => handleManualControl(robot, true)}
               >
-                <Text style={[styles.robotButtonText, { color: theme.highlight }]}>Simulate →</Text>
+                <Text style={[styles.robotButtonText, { color: theme.primary }]}>Simulate</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={styles.robotButton} 
+                style={[styles.robotButton, { backgroundColor: theme.highlight }]} 
                 onPress={() => handleManualControl(robot, false)}
               >
-                <Text style={[styles.robotButtonText, { color: theme.highlight }]}>Control →</Text>
+                <Text style={[styles.robotButtonText, { color: theme.primary }]}>Control</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -293,9 +293,18 @@ const styles = StyleSheet.create({
   robotButton: {
     flex: 1,
     alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginHorizontal: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   robotButtonText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
   },
   addRobotCard: {
