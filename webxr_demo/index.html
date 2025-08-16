@@ -51,6 +51,7 @@
         <br>
         <button id="enterVR">Enter VR</button>
         <button id="playPause">Play/Pause</button>
+        <button id="reloadPage">Reload Page</button>
         <p><small>Note: Click "Enter VR" to experience in VR/AR. Works on desktop too!</small></p>
     </div>
 
@@ -177,6 +178,7 @@
         const videoFileInput = document.getElementById('videoFile');
         const enterVRButton = document.getElementById('enterVR');
         const playPauseButton = document.getElementById('playPause');
+        const reloadButton = document.getElementById('reloadPage');
         const playButton3D = document.getElementById('playButton');
         const scene = document.querySelector('a-scene');
 
@@ -191,6 +193,9 @@
 
         // Event listeners for 2D UI
         playPauseButton.addEventListener('click', togglePlayPause);
+        reloadButton.addEventListener('click', () => {
+            window.location.reload();
+        });
 
         // Event listener for 3D play button
         playButton3D.addEventListener('click', togglePlayPause);
