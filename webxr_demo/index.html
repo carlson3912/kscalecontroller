@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>WebXR Video Player</title>
+    <meta name="description" content="WebXR Video Player Demo">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.0/aframe.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.0/aframe.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        
+        #ui {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 300px;
+        }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        input[type="file"] {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h3>WebXR Video Player</h3>
+        <p>Load a video file or use the sample video</p>
+        <input type="file" id="videoFile" accept="video/*">
+        <br>
+        <button id="enterVR">Enter VR</button>
+        <button id="playPause">Play/Pause</button>
+        <p><small>Note: Click "Enter VR" to experience in VR/AR. Works on desktop too!</small></p>
+    </div>
+
+    <a-scene 
+        vr-mode-ui="enabled: true"
+        embedded 
+        style="height: 100vh; width: 100vw;"
+        background="color: #0a0a0a">
+        
+        <!-- Assets -->
+        <a-assets>
+            <!-- Default sample video (Big Buck Bunny sample) -->
+            <video 
+                id="videoElement" 
+                autoplay 
+                loop 
+                muted
+                crossorigin="anonymous"
+                src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4">
+            </video>
+        </a-assets>
+
+        <!-- Video Screen -->
+        <a-plane 
+            id="videoScreen"
+            position="0 2 -4" 
+            rotation="0 0 0" 
+            width="6" 
+            height="3.375"
+            material="src: #videoElement; side: double"
+            shadow="receive: true">
+            
+            <!-- Optional frame around the video -->
+            <a-box 
+                position="0 0 -0.01"
+                width="6.2" 
+                height="3.575" 
+                depth="0.05"
+                material="color: #333333">
+            </a-box>
+        </a-plane>
+
+        <!-- Floor -->
+        <a-plane 
+            position="0 0 -4" 
+            rotation="-90 0 0" 
+            width="20" 
+            height="20"
+            material="color: #1a1a1a; roughness: 0.8"
+            shadow="receive: true">
+        </a-plane>
+
+        <!-- Lighting -->
+        <a-light 
+            type="ambient" 
+            color="#404040">
+        </a-light>
+        
+        <a-light 
+            type="directional" 
+            position="2 4 2" 
+            color="#ffffff"
+            intensity="0.5"
+            shadow="cast: true">
+        </a-light>
+
+        <!-- Camera with controllers -->
+        <a-entity id="cameraRig">
+            <a-camera 
+                id="camera"
+                position="0 1.6 0"
+                look-controls="pointerLockEnabled: true"
+                wasd-controls="acceleration: 20">
+                
+                <!-- Cursor for interaction -->
+                <a-cursor
+                    position="0 0 -1"
+                    geometry="primitive: ring; radiusInner: 0.02; radiusOuter: 0.03"
+                    material="color: white; shader: flat"
+                    raycaster="objects: .interactive">
+                </a-cursor>
+            </a-camera>
+            
+            <!-- VR Controllers -->
+            <a-entity 
+                id="leftHand" 
+                laser-controls="hand: left" 
+                raycaster="objects: .interactive">
+            </a-entity>
+            
+            <a-entity 
+                id="rightHand" 
+                laser-controls="hand: right" 
+                raycaster="objects: .interactive">
+            </a-entity>
+        </a-entity>
+
+        <!-- Interactive play/pause button in 3D space -->
+        <a-text
+            id="playButton"
+            class="interactive"
+            position="0 0.5 -3.8"
+            value="▶️ PLAY/PAUSE"
+            align="center"
+            color="#00ff00"
+            geometry="primitive: plane; width: auto; height: auto"
+            material="color: #000000; opacity: 0.7"
+            text="width: 8">
+        </a-text>
+
+        <!-- Instructions -->
+        <a-text
+            position="-3 3.5 -4"
+            value="WebXR Video Player\nLook around • Click play/pause\nUse file input to load your own video"
+            align="left"
+            color="#ffffff"
+            text="width: 4">
+        </a-text>
+    </a-scene>
+
+    <script>
+        // Get DOM elements
+        const videoElement = document.getElementById('videoElement');
+        const videoFileInput = document.getElementById('videoFile');
+        const enterVRButton = document.getElementById('enterVR');
+        const playPauseButton = document.getElementById('playPause');
+        const playButton3D = document.getElementById('playButton');
+        const scene = document.querySelector('a-scene');
+
+        // Video controls
+        function togglePlayPause() {
+            if (videoElement.paused) {
+                videoElement.play().catch(e => console.log('Play failed:', e));
+            } else {
+                videoElement.pause();
+            }
+        }
+
+        // Event listeners for 2D UI
+        playPauseButton.addEventListener('click', togglePlayPause);
+
+        // Event listener for 3D play button
+        playButton3D.addEventListener('click', togglePlayPause);
+
+        // Enter VR
+        enterVRButton.addEventListener('click', () => {
+            scene.enterVR();
+        });
+
+        // File input handler
+        videoFileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file && file.type.startsWith('video/')) {
+                const url = URL.createObjectURL(file);
+                videoElement.src = url;
+                
+                // Update the material
+                const videoScreen = document.getElementById('videoScreen');
+                videoScreen.setAttribute('material', 'src', `#videoElement`);
+                
+                console.log('Loaded video:', file.name);
+            }
+        });
+
+        // Auto-play handling (some browsers require user interaction)
+        document.addEventListener('click', () => {
+            if (videoElement.paused) {
+                videoElement.play().catch(e => console.log('Auto-play failed:', e));
+            }
+        }, { once: true });
+
+        // VR session handlers
+        scene.addEventListener('enter-vr', () => {
+            console.log('Entered VR');
+            // Ensure video is playing in VR
+            videoElement.play().catch(e => console.log('VR play failed:', e));
+        });
+
+        scene.addEventListener('exit-vr', () => {
+            console.log('Exited VR');
+        });
+
+        // Handle video loading
+        videoElement.addEventListener('loadeddata', () => {
+            console.log('Video loaded and ready');
+        });
+
+        videoElement.addEventListener('error', (e) => {
+            console.error('Video error:', e);
+        });
+
+        // Initialize
+        console.log('WebXR Video Player initialized');
+        console.log('Compatible with VR headsets, AR devices, and desktop browsers');
+    </script>
+</body>
+</html>
