@@ -46,13 +46,11 @@
 <body>
     <div id="ui">
         <h3>WebXR Video Player</h3>
-        <p>Load a video file or use the sample video</p>
-        <input type="file" id="videoFile" accept="video/*">
-        <br>
+        <p>Playing: video.mp4 from local directory</p>
         <button id="enterVR">Enter VR</button>
         <button id="playPause">Play/Pause</button>
         <button id="reloadPage">Reload Page</button>
-        <p><small>Note: Click "Enter VR" to experience in VR/AR. Works on desktop too!</small></p>
+        <p><small>Note: Place your video as "video.mp4" in the same directory. Click "Enter VR" for VR/AR experience!</small></p>
     </div>
 
     <a-scene 
@@ -63,14 +61,16 @@
         
         <!-- Assets -->
         <a-assets>
-            <!-- Default sample video (Big Buck Bunny sample) -->
+            <!-- Local video file -->
             <video 
                 id="videoElement" 
                 autoplay 
                 loop 
                 muted
                 crossorigin="anonymous"
-                src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4">
+                src="video.mp4">
+                <!-- Fallback message if video.mp4 doesn't exist -->
+                Your browser doesn't support video or video.mp4 not found.
             </video>
         </a-assets>
 
@@ -175,7 +175,6 @@
     <script>
         // Get DOM elements
         const videoElement = document.getElementById('videoElement');
-        const videoFileInput = document.getElementById('videoFile');
         const enterVRButton = document.getElementById('enterVR');
         const playPauseButton = document.getElementById('playPause');
         const reloadButton = document.getElementById('reloadPage');
@@ -203,21 +202,6 @@
         // Enter VR
         enterVRButton.addEventListener('click', () => {
             scene.enterVR();
-        });
-
-        // File input handler
-        videoFileInput.addEventListener('change', (event) => {
-            const file = event.target.files[0];
-            if (file && file.type.startsWith('video/')) {
-                const url = URL.createObjectURL(file);
-                videoElement.src = url;
-                
-                // Update the material
-                const videoScreen = document.getElementById('videoScreen');
-                videoScreen.setAttribute('material', 'src', `#videoElement`);
-                
-                console.log('Loaded video:', file.name);
-            }
         });
 
         // Auto-play handling (some browsers require user interaction)
